@@ -5,7 +5,6 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-from ragas_experimental.metric.numeric import NumericMetric, numeric_metric
 from scipy.stats import spearmanr
 from tqdm import tqdm
 
@@ -13,24 +12,16 @@ from tqdm import tqdm
 # A *very* small numeric metric: token-level F1 between candidate & reference
 # -----------------------------------------------------------------------------
 
-@numeric_metric(name="token_f1", range=(0.0, 1.0))
-class TokenF1(NumericMetric):
-    """Compute token-level F1 between candidate and reference answers."""
-
-    def _calc(self, reference: str, candidate: str) -> float:  # type: ignore[override]
-        ref_tokens = reference.lower().split()
-        cand_tokens = candidate.lower().split()
-        common = len(set(ref_tokens) & set(cand_tokens))
-        if common == 0:
-            return 0.0
-        precision = common / len(cand_tokens)
-        recall = common / len(ref_tokens)
-        return 2 * precision * recall / (precision + recall)
-
-    # ragas_experimental expects `run` method already via base class; we just need
-    # a wrapper for a single example.
-    def run_single(self, reference: str, candidate: str) -> float:
-        return self._calc(reference, candidate)
+def token_f1(reference: str, candidate: str) -> float:
+    """Simple token-level F1 score."""
+    ref_tokens = reference.lower().split()
+    cand_tokens = candidate.lower().split()
+    common = len(set(ref_tokens) & set(cand_tokens))
+    if common == 0:
+        return 0.0
+    precision = common / len(cand_tokens)
+    recall = common / len(ref_tokens)
+    return 2 * precision * recall / (precision + recall)
 
 
 def load_jsonl(path: Path) -> List[dict]:
@@ -43,11 +34,9 @@ def main(input_jsonl: Path, dspy_scores_csv: Path):
     records = load_jsonl(input_jsonl)
     dspy_df = pd.read_csv(dspy_scores_csv)
 
-    f1_metric = TokenF1()
-
     ragas_scores = []
     for rec in tqdm(records, desc="ragas metric"):
-        ragas_scores.append(f1_metric.run_single(rec["reference"], rec["candidate"]))
+        ragas_scores.append(token_f1(rec["reference"], rec["candidate"]))
 
     # Combine into DataFrame for correlation
     df = pd.DataFrame({
