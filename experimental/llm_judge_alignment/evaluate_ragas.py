@@ -13,13 +13,12 @@ from ragas_experimental.metric.numeric import NumericMetric, numeric_metric
 
 
 # -----------------------------------------------------------------------------
-# Define a simple token-level F1 metric using ragas_experimental decorator
+# Define metrics using ragas_experimental
 # -----------------------------------------------------------------------------
 
-
-@numeric_metric(name="token_f1", range=(0.0, 1.0))
-class TokenF1(NumericMetric):
-    """Token-level F1 metric implemented via ragas_experimental."""
+@numeric_metric(name="answer_relevancy", range=(0.0, 1.0))
+class AnswerRelevancy(NumericMetric):
+    """Very simple semantic overlap: token-level F1 between answer & reference."""
 
     def _calc(self, reference: str, candidate: str) -> float:  # type: ignore[override]
         ref_tokens = reference.lower().split()
@@ -29,6 +28,23 @@ class TokenF1(NumericMetric):
             return 0.0
         precision = common / len(cand_tokens)
         recall = common / len(ref_tokens)
+        return 2 * precision * recall / (precision + recall)
+
+
+@numeric_metric(name="context_relevancy", range=(0.0, 1.0))
+class ContextRelevancy(NumericMetric):
+    """Placeholder context relevancy – score is 0 when no context available."""
+
+    def _calc(self, context: str, candidate: str) -> float:  # type: ignore[override]
+        if not context:
+            return 0.0
+        ctx_tokens = context.lower().split()
+        cand_tokens = candidate.lower().split()
+        common = len(set(ctx_tokens) & set(cand_tokens))
+        if common == 0:
+            return 0.0
+        precision = common / len(cand_tokens)
+        recall = common / len(ctx_tokens)
         return 2 * precision * recall / (precision + recall)
 
 
@@ -42,20 +58,29 @@ def main(input_jsonl: Path, dspy_scores_csv: Path):
     records = load_jsonl(input_jsonl)
     dspy_df = pd.read_csv(dspy_scores_csv)
 
-    ragas_scores = []
-    for rec in tqdm(records, desc="ragas metric"):
-        metric_inst = TokenF1
-        ragas_scores.append(metric_inst.score(None, reference=rec["reference"], candidate=rec["candidate"]).result)
+    metric_a = AnswerRelevancy
+    metric_c = ContextRelevancy
 
-    # Combine into DataFrame for correlation
+    scores_a = []
+    scores_c = []
+    for rec in tqdm(records, desc="computing metrics"):
+        scores_a.append(
+            metric_a.score(None, reference=rec.get("reference", ""), candidate=rec["candidate"]).result
+        )
+        scores_c.append(
+            metric_c.score(None, context=rec.get("context", ""), candidate=rec["candidate"]).result
+        )
+
     df = pd.DataFrame({
-        "ragas_f1": ragas_scores,
+        "answer_relevancy": scores_a,
+        "context_relevancy": scores_c,
         "dspy_score": dspy_df["score"].astype(float),
     })
 
-    rho, p = spearmanr(df["ragas_f1"], df["dspy_score"])
-    print("\n=== Correlation Report ===")
-    print(f"Spearman ρ: {rho:.3f} (p={p:.3g}) over n={len(df)}")
+    for col in ["answer_relevancy", "context_relevancy"]:
+        rho, p = spearmanr(df[col], df["dspy_score"])
+        print(f"Spearman correlation between {col} and DSPy score: ρ={rho:.3f}, p={p:.3g}")
+
     print(df.describe())
 
 
