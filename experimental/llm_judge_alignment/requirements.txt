@@ -1,0 +1,7 @@
+dspy-ai>=2.6.16
+openai>=1.12.0
+datasets>=2.18.0
+pandas>=2.2.0
+scipy>=1.11.0
+tqdm>=4.66.0
+# `ragas_experimental` lives inside the repo; no pip install needed
