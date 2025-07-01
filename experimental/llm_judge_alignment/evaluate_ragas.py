@@ -8,28 +8,13 @@ import pandas as pd
 from scipy.stats import spearmanr
 from tqdm import tqdm
 
-# Use ragas_experimental to define an official numeric metric
-from ragas_experimental.metric.numeric import NumericMetric, numeric_metric
+# Use ragas ready-made metrics
+from ragas.metrics import answer_relevancy
 
 
 # -----------------------------------------------------------------------------
 # Custom numeric metric registered with ragas_experimental
 # -----------------------------------------------------------------------------
-
-
-@numeric_metric(name="token_f1", range=(0.0, 1.0))
-class TokenF1(NumericMetric):
-    """Token‐level F1 implemented as a ragas_experimental metric."""
-
-    def _calc(self, reference: str, candidate: str) -> float:  # type: ignore[override]
-        ref_tokens = reference.lower().split()
-        cand_tokens = candidate.lower().split()
-        common = len(set(ref_tokens) & set(cand_tokens))
-        if common == 0:
-            return 0.0
-        precision = common / len(cand_tokens)
-        recall = common / len(ref_tokens)
-        return 2 * precision * recall / (precision + recall)
 
 
 def load_jsonl(path: Path) -> List[dict]:
@@ -44,8 +29,8 @@ def main(input_jsonl: Path, dspy_scores_csv: Path):
 
     ragas_scores = []
     for rec in tqdm(records, desc="ragas metric"):
-        metric_inst = TokenF1
-        ragas_scores.append(metric_inst.score(None, reference=rec["reference"], candidate=rec["candidate"]).result)
+        metric_inst = answer_relevancy
+        ragas_scores.append(metric_inst.score(None, user_input=rec["question"], response=rec["candidate"]).result)
 
     # Combine into DataFrame for correlation
     df = pd.DataFrame({
